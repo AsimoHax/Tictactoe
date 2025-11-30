@@ -2,6 +2,8 @@ import React, { useEffect, useState } from "react";
 import "./TicTacToe.css";
 import cross from "../Assets/cross.png";
 import circle from "../Assets/circle.png";
+import { io } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 
 const WIN_PATTERNS = [
   [0, 1, 2],
@@ -25,26 +27,71 @@ export const TicTacToe: React.FC = () => {
   ]);
   const [message, setMessage] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
+  const [roomInfo, setRoomInfo] = useState<any>(null);
+  const [role, setRole] = useState<"player" | "spectator" | null>(null);
+  const [symbol, setSymbol] = useState<"X" | "O" | null>(null);
 
   useEffect(() => {
-    const w = getWinner(board);
-    setWinner(w);
-  }, [board]);
+    // read room id from query param ?room=abc
+    const params = new URLSearchParams(window.location.search);
+    const roomId = params.get("room") || "default-room";
 
-  function getWinner(b: string[]) {
-    for (const [a, c, d] of WIN_PATTERNS) {
-      if (b[a] && b[a] === b[c] && b[a] === b[d]) return b[a];
-    }
-    return null;
-  }
+    const s = io("http://localhost:5000");
+    setSocket(s);
 
+    s.on("connect", () => {
+      s.emit("join-room", { roomId, userName: "Client-" + s.id.slice(0, 4) });
+    });
+
+    s.on("room-update", ({ roomId: rid, room }) => {
+      setRoomInfo(room);
+      // set role & symbol locally when assigned by server: detect whether we are a player or spectator by checking if socket is player
+      // server doesn't return per-socket assignment — we infer locally by requesting role metadata
+      const meIsPlayer = room.players.some((p) =>
+        p.name.includes(s.id.slice(0, 4))
+      );
+      if (meIsPlayer) {
+        setRole("player");
+        const p = room.players.find((p) => p.name.includes(s.id.slice(0, 4)));
+        setSymbol(p?.symbol || null);
+      } else {
+        setRole("spectator");
+        setSymbol(null);
+      }
+      setBoard(room.board || board);
+      setXIsNext(room.xIsNext ?? xIsNext);
+      setWinner(room.winner ?? null);
+    });
+
+    s.on("game-over", ({ winner, reason }) => {
+      setWinner(winner);
+      setChat((c) => [
+        ...c,
+        {
+          from: "System",
+          text: `Game over: ${winner} (${reason || "finished"})`,
+        },
+      ]);
+    });
+
+    // cleanup
+    return () => {
+      if (s.connected) s.disconnect();
+    };
+  }, []);
+
+  // handle move — emit to server
   function handleClick(index: number) {
+    if (!socket) return;
+    if (role !== "player") return;
     if (winner || board[index]) return;
-    const next = xIsNext ? "X" : "O";
-    const copy = [...board];
-    copy[index] = next;
-    setBoard(copy);
-    setXIsNext(!xIsNext);
+    socket.emit("move", {
+      roomId:
+        new URLSearchParams(window.location.search).get("room") ||
+        "default-room",
+      index,
+    });
   }
 
   function reset() {
@@ -61,16 +108,21 @@ export const TicTacToe: React.FC = () => {
 
   // surrender immediately ends the match; opponent becomes winner
   function surrender() {
-    if (winner) return; // already finished
-    const opponent = xIsNext ? "O" : "X";
-    setWinner(opponent);
-    setChat((c) => [
-      ...c,
-      {
-        from: "System",
-        text: `Player ${xIsNext ? "X" : "O"} surrendered — ${opponent} wins`,
-      },
-    ]);
+    if (!socket) return;
+    socket.emit("surrender", {
+      roomId:
+        new URLSearchParams(window.location.search).get("room") ||
+        "default-room",
+    });
+  }
+
+  function promoteToPlayer() {
+    if (!socket) return;
+    socket.emit("promote", {
+      roomId:
+        new URLSearchParams(window.location.search).get("room") ||
+        "default-room",
+    });
   }
 
   return (
