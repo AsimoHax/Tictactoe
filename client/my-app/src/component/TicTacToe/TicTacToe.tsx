@@ -1,159 +1,192 @@
-import React, { useState } from "react";
-import "../TicTacToe/TicTacToe.css";
+import React, { useEffect, useState } from "react";
+import "./TicTacToe.css";
+import cross from "../Assets/cross.png";
 import circle from "../Assets/circle.png";
-import cross from "../assets/cross.png";
 
-let data = ["", "", "", "", "", "", "", "", ""];
+const WIN_PATTERNS = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6],
+];
 
-export const TicTacToe = () => {
-  let [count, setCount] = useState(0);
-  let [lock, setLock] = useState(false);
+export const TicTacToe: React.FC = () => {
+  const emptyBoard = Array(9).fill("");
+  const [board, setBoard] = useState<string[]>(emptyBoard);
+  const [xIsNext, setXIsNext] = useState(true);
+  const [winner, setWinner] = useState<string | null>(null);
+  const [spectators, setSpectators] = useState<number>(3);
+  const [chat, setChat] = useState<{ from: string; text: string }[]>([
+    { from: "System", text: "Welcome to the game" },
+  ]);
+  const [message, setMessage] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
-  const toggle = (e: React.MouseEvent<HTMLDivElement>, num: number) => {
-    if (lock) return;
-    const target = e.currentTarget as HTMLDivElement;
+  useEffect(() => {
+    const w = getWinner(board);
+    setWinner(w);
+  }, [board]);
 
-    if (count % 2 === 0) {
-      target.innerHTML = `<img src="${cross}" class="img-box"/>`;
-      data[num] = "X";
-      setCount((c) => c + 1);
-    } else {
-      target.innerHTML = `<img src="${circle}" class="img-box"/>`;
-      data[num] = "O";
-      setCount((c) => c + 1);
+  function getWinner(b: string[]) {
+    for (const [a, c, d] of WIN_PATTERNS) {
+      if (b[a] && b[a] === b[c] && b[a] === b[d]) return b[a];
     }
-    checkWinner();
-  };
+    return null;
+  }
 
-  const checkWinner = () => {
-    if (
-      data[0] !== "" &&
-      data[0] === data[1] &&
-      data[1] === data[2] &&
-      data[2] !== ""
-    ) {
-      won(data);
-    } else if (
-      data[3] !== "" &&
-      data[3] === data[4] &&
-      data[4] === data[5] &&
-      data[5] !== ""
-    ) {
-      won(data);
-    } else if (
-      data[6] !== "" &&
-      data[6] === data[7] &&
-      data[7] === data[8] &&
-      data[8] !== ""
-    ) {
-      won(data);
-    } else if (
-      data[0] !== "" &&
-      data[0] === data[3] &&
-      data[3] === data[6] &&
-      data[6] !== ""
-    ) {
-      won(data);
-    } else if (
-      data[1] !== "" &&
-      data[1] === data[4] &&
-      data[4] === data[7] &&
-      data[7] !== ""
-    ) {
-      won(data);
-    } else if (
-      data[2] !== "" &&
-      data[2] === data[5] &&
-      data[5] === data[8] &&
-      data[8] !== ""
-    ) {
-      won(data);
-    } else if (
-      data[0] !== "" &&
-      data[0] === data[4] &&
-      data[4] === data[8] &&
-      data[8] !== ""
-    ) {
-      won(data);
-    } else if (
-      data[2] !== "" &&
-      data[2] === data[4] &&
-      data[4] === data[6] &&
-      data[6] !== ""
-    ) {
-      won(data);
-    }
-  };
-  const won = () => {
-    setLock(true);
-  };
+  function handleClick(index: number) {
+    if (winner || board[index]) return;
+    const next = xIsNext ? "X" : "O";
+    const copy = [...board];
+    copy[index] = next;
+    setBoard(copy);
+    setXIsNext(!xIsNext);
+  }
+
+  function reset() {
+    setBoard(emptyBoard);
+    setXIsNext(true);
+    setWinner(null);
+  }
+
+  function sendMessage() {
+    if (!message.trim()) return;
+    setChat((c) => [...c, { from: "You", text: message.trim() }]);
+    setMessage("");
+  }
+
+  // surrender immediately ends the match; opponent becomes winner
+  function surrender() {
+    if (winner) return; // already finished
+    const opponent = xIsNext ? "O" : "X";
+    setWinner(opponent);
+    setChat((c) => [
+      ...c,
+      {
+        from: "System",
+        text: `Player ${xIsNext ? "X" : "O"} surrendered — ${opponent} wins`,
+      },
+    ]);
+  }
 
   return (
-    <div className="container">
-      <h1 className="title">Tic Tac Toe</h1>
-      <div className="board">
-        <div className="row1">
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 0);
+    <div className="ttt-page">
+      <div className="ttt-left">
+        <div className="left-top">
+          <button
+            className="back-btn"
+            onClick={() => {
+              /* navigate back */
             }}
-          ></div>
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 1);
-            }}
-          ></div>
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 2);
-            }}
-          ></div>
+          >
+            ← Back
+          </button>
+          <button
+            className="surrender-btn"
+            onClick={surrender}
+            disabled={!!winner}
+          >
+            Surrender
+          </button>
         </div>
-        <div className="row1">
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 3);
-            }}
-          ></div>
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 4);
-            }}
-          ></div>
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 5);
-            }}
-          ></div>
+
+        <div className="player-list">
+          <div className={`player card ${xIsNext ? "active" : ""}`}>
+            <div className="avatar">X</div>
+            <div className="meta">
+              <div className="name">Player X</div>
+              <div className="status">{xIsNext ? "Your turn" : "Waiting"}</div>
+            </div>
+            <img src={cross} alt="X" className="symbol" />
+          </div>
+
+          <div className={`player card ${!xIsNext ? "active" : ""}`}>
+            <div className="avatar">O</div>
+            <div className="meta">
+              <div className="name">Player O</div>
+              <div className="status">{!xIsNext ? "Your turn" : "Waiting"}</div>
+            </div>
+            <img src={circle} alt="O" className="symbol" />
+          </div>
         </div>
-        <div className="row1">
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 6);
-            }}
-          ></div>
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 7);
-            }}
-          ></div>
-          <div
-            className="box"
-            onClick={(e) => {
-              toggle(e, 8);
-            }}
-          ></div>
+
+        <div className="left-footer">
+          <button onClick={reset} className="reset-btn">
+            Restart
+          </button>
         </div>
       </div>
-      <button className="reset">Restart</button>
+
+      <div className="ttt-center">
+        <h2 className="game-title">Tic Tac Toe</h2>
+        <div className="status-line">
+          {winner ? `Winner: ${winner}` : `Next: ${xIsNext ? "X" : "O"}`}
+        </div>
+
+        <div className="board" role="grid" aria-label="tic-tac-toe board">
+          {board.map((cell, i) => (
+            <div
+              key={i}
+              className={`box ${cell ? "filled" : ""} ${
+                winner && cell === winner ? "winner" : ""
+              }`}
+              onClick={() => handleClick(i)}
+              role="button"
+              aria-label={`cell-${i}`}
+            >
+              {cell === "X" && <img src={cross} alt="X" className="img-box" />}
+              {cell === "O" && <img src={circle} alt="O" className="img-box" />}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="ttt-right">
+        <div className="right-top">
+          <div className="spectator">
+            👀 <span>{spectators}</span> watching
+          </div>
+
+          <div className="profile">
+            <button
+              className="profile-btn"
+              onClick={() => setDropdownOpen((s) => !s)}
+              aria-expanded={dropdownOpen}
+            >
+              <div className="avatar-small">ME</div>
+            </button>
+            {dropdownOpen && (
+              <div className="drop-menu">
+                <button className="drop-item">Settings</button>
+                <button className="drop-item">Drop out</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="chat-window">
+          <div className="chat-list">
+            {chat.map((c, idx) => (
+              <div className="chat-message" key={idx}>
+                <strong>{c.from}</strong>: {c.text}
+              </div>
+            ))}
+          </div>
+
+          <div className="chat-input">
+            <input
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Type a message"
+            />
+            <button onClick={sendMessage}>Send</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
