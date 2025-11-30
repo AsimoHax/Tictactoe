@@ -2,6 +2,7 @@
 const express = require('express');
 const firebaseAdmin = require('firebase-admin');
 const cors = require('cors');
+const WebSocket = require("ws");
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -55,4 +56,50 @@ app.post('/api/games', async (req, res) => {
 // Start the server
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
+});
+
+
+const wss = new WebSocket.Server({ server });
+
+wss.on('connection', (ws, req) => {
+  const userId = req.query.userId; // This can be passed from the client on connection
+
+  // Send an initial welcome message
+  ws.send(JSON.stringify({ type: 'welcome', message: 'Welcome to the room!' }));
+
+  // Listen for moves or game actions from the client
+  ws.on('message', (message) => {
+    const data = JSON.parse(message);
+    const { type, roomId, move, playerId } = data;
+
+    if (type === "move") {
+      // Update Firestore with the new move
+      // Then broadcast updated game state to all clients in the room
+      updateGameState(roomId, move, playerId);
+    }
+  });
+
+  // Function to update the game state in Firestore
+  async function updateGameState(roomId, move, playerId) {
+    const roomRef = doc(db, "rooms", roomId);
+    const roomData = (await getDoc(roomRef)).data();
+    
+    // Update the game state in Firestore (e.g., board and current player)
+    const updatedGameState = applyMove(roomData.gameState, move, playerId);
+    await updateDoc(roomRef, { gameState: updatedGameState });
+    
+    // Send the updated game state to all connected clients
+    wss.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ type: "gameUpdate", gameState: updatedGameState }));
+      }
+    });
+  }
+
+  // Helper to apply the move and check for a winner
+  function applyMove(gameState, move, playerId) {
+    const newBoard = [...gameState.board];
+    newBoard[move] = playerId;
+    return { ...gameState, board: newBoard };
+  }
 });
