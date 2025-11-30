@@ -1,11 +1,15 @@
 // server.js
-const express = require('express');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
 const firebaseAdmin = require('firebase-admin');
 const cors = require('cors');
-const WebSocket = require("ws");
 
 const app = express();
-const port = process.env.PORT || 5000;
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
+
+const PORT = process.env.PORT || 5000;
 
 // Initialize Firebase Admin SDK
 const serviceAccount = require('./tictactoe.json'); // Path to Firebase Admin SDK key
@@ -53,53 +57,156 @@ app.post('/api/games', async (req, res) => {
   }
 });
 
-// Start the server
-app.listen(port, () => {
-  console.log(`Server running on http://localhost:${port}`);
-});
+// Note: use server.listen below (we use the HTTP server + socket.io). Removed duplicate app.listen call.
 
 
-const wss = new WebSocket.Server({ server });
+const rooms = {}; // { [roomId]: { players: [{id,name,symbol,socketId}], spectators: Set, board, xIsNext, started, winner } }
 
-wss.on('connection', (ws, req) => {
-  const userId = req.query.userId; // This can be passed from the client on connection
+function makeRoomIfMissing(roomId) {
+  if (!rooms[roomId]) {
+    rooms[roomId] = { players: [], spectators: new Set(), board: Array(9).fill(""), xIsNext: true, started: false, winner: null };
+  }
+}
 
-  // Send an initial welcome message
-  ws.send(JSON.stringify({ type: 'welcome', message: 'Welcome to the room!' }));
+io.on("connection", (socket) => {
+  console.log("socket connected", socket.id);
 
-  // Listen for moves or game actions from the client
-  ws.on('message', (message) => {
-    const data = JSON.parse(message);
-    const { type, roomId, move, playerId } = data;
+  socket.on("join-room", ({ roomId, userName }) => {
+    makeRoomIfMissing(roomId);
+    const room = rooms[roomId];
 
-    if (type === "move") {
-      // Update Firestore with the new move
-      // Then broadcast updated game state to all clients in the room
-      updateGameState(roomId, move, playerId);
+    // ensure single window => same socket id is the identity for the window
+    // Promote to player if slots available; default to spectator if 2 players already
+    if (room.players.length < 2) {
+      const symbol = room.players.length === 0 ? "X" : "O";
+      const player = { id: socket.id, name: userName || `Player-${socket.id.slice(0,4)}`, symbol, socketId: socket.id };
+      room.players.push(player);
+      socket.data.role = "player";
+      socket.data.symbol = symbol;
+      socket.join(roomId);
+      room.started = room.players.length === 2; // start automatically when 2 players
+    } else {
+      room.spectators.add(socket.id);
+      socket.data.role = "spectator";
+      socket.join(roomId);
+    }
+
+    // Broadcast room update
+    io.to(roomId).emit("room-update", { roomId, room: sanitizeRoom(room) });
+  });
+
+  socket.on("move", ({ roomId, index }) => {
+    const room = rooms[roomId];
+    if (!room || room.winner) return;
+    // find player symbol by socket id
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return;
+    // enforce turn
+    const isTurn = (room.xIsNext && player.symbol === "X") || (!room.xIsNext && player.symbol === "O");
+    if (!isTurn) return;
+    if (room.board[index]) return;
+    room.board[index] = player.symbol;
+    room.xIsNext = !room.xIsNext;
+    // check winner
+    const winnerSymbol = checkWinner(room.board);
+    if (winnerSymbol) {
+      room.winner = winnerSymbol;
+      room.started = false;
+      io.to(roomId).emit("game-over", { winner: winnerSymbol });
+    }
+    io.to(roomId).emit("room-update", { roomId, room: sanitizeRoom(room) });
+  });
+
+  socket.on("surrender", ({ roomId }) => {
+    const room = rooms[roomId];
+    if (!room || room.winner) return;
+    const player = room.players.find(p => p.socketId === socket.id);
+    if (!player) return;
+    const opponent = room.players.find(p => p.socketId !== socket.id);
+    if (opponent) {
+      room.winner = opponent.symbol;
+      room.started = false;
+      io.to(roomId).emit("game-over", { winner: room.winner, reason: "surrender", by: player.symbol });
+    }
+    io.to(roomId).emit("room-update", { roomId, room: sanitizeRoom(room) });
+  });
+
+  socket.on("promote", ({ roomId }) => {
+    // spectator requests to become a player — server will add if slot available
+    const room = rooms[roomId];
+    if (!room) return;
+    if (room.players.length < 2 && room.spectators.has(socket.id)) {
+      const symbol = room.players.length === 0 ? "X" : "O";
+      room.players.push({ id: socket.id, name: `Player-${socket.id.slice(0,4)}`, symbol, socketId: socket.id });
+      room.spectators.delete(socket.id);
+      socket.data.role = "player";
+      socket.data.symbol = symbol;
+      room.started = room.players.length === 2;
+      io.to(roomId).emit("room-update", { roomId, room: sanitizeRoom(room) });
+    } else {
+      socket.emit("promote-failed", { reason: "no-slot" });
     }
   });
 
-  // Function to update the game state in Firestore
-  async function updateGameState(roomId, move, playerId) {
-    const roomRef = doc(db, "rooms", roomId);
-    const roomData = (await getDoc(roomRef)).data();
-    
-    // Update the game state in Firestore (e.g., board and current player)
-    const updatedGameState = applyMove(roomData.gameState, move, playerId);
-    await updateDoc(roomRef, { gameState: updatedGameState });
-    
-    // Send the updated game state to all connected clients
-    wss.clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ type: "gameUpdate", gameState: updatedGameState }));
-      }
-    });
-  }
+  socket.on("leave-room", ({ roomId }) => {
+    leaveRoom(socket, roomId);
+  });
 
-  // Helper to apply the move and check for a winner
-  function applyMove(gameState, move, playerId) {
-    const newBoard = [...gameState.board];
-    newBoard[move] = playerId;
-    return { ...gameState, board: newBoard };
+  socket.on("disconnect", () => {
+    // find any room and remove socket
+    Object.keys(rooms).forEach(roomId => leaveRoom(socket, roomId));
+    console.log("socket disconnected", socket.id);
+  });
+
+  function leaveRoom(socket, roomId) {
+    const room = rooms[roomId];
+    if (!room) return;
+    // remove from players if present
+    const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
+    if (playerIdx >= 0) {
+      const removed = room.players.splice(playerIdx, 1)[0];
+      // if game started and other player exists => other player wins
+      if (room.started && room.players.length === 1) {
+        room.winner = room.players[0].symbol;
+        room.started = false;
+        io.to(roomId).emit("game-over", { winner: room.winner, reason: "player-left" });
+      }
+    }
+    // remove from spectators
+    if (room.spectators.has(socket.id)) {
+      room.spectators.delete(socket.id);
+    }
+    socket.leave(roomId);
+    // remove room if empty
+    if (room.players.length + room.spectators.size === 0) {
+      delete rooms[roomId];
+    } else {
+      io.to(roomId).emit("room-update", { roomId, room: sanitizeRoom(room) });
+    }
   }
 });
+
+function sanitizeRoom(room) {
+  return {
+    players: room.players.map(p => ({ name: p.name, symbol: p.symbol })),
+    spectators: room.spectators ? room.spectators.size : 0,
+    board: room.board,
+    xIsNext: room.xIsNext,
+    started: room.started,
+    winner: room.winner
+  };
+}
+
+function checkWinner(b) {
+  const patterns = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+  for (const [a,b1,c] of patterns) {
+    if (b[a] && b[a] === b[b1] && b[a] === b[c]) return b[a];
+  }
+  return null;
+}
+
+server.listen(PORT, () => { console.log(`Server listening on http://localhost:${PORT}`); });
