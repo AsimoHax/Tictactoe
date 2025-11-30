@@ -1,0 +1,36 @@
+.container {
+    text-align: center;
+}
+.title{
+    margin-top: 50px;
+    color:white;
+    font-size: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    .span {
+        color: #61dafb;
+    }
+}
+.box{
+    display: flex;
+    height: 180px;
+    width: 180px;
+    border:4px solid #435663;
+    border-radius: 12px;
+    cursor: pointer;
+    
+
+}
+.box img{
+        margin:25px
+    }
+.board{
+    height: 600px;
+    width: 564px;
+    display: flex;
+    margin: auto;
+}
+.row1{
+    /*--------------------------------------------*/
+}

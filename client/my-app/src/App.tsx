@@ -1,6 +1,6 @@
 import { useState } from "react";
 import "./App.css";
-import { TicTacToe } from "./component/TicTacToe/TicTacToe.jsx";
+import { TicTacToe } from "./component/TicTacToe/TicTacToe.js";
 
 function App() {
   const [count, setCount] = useState(0);
