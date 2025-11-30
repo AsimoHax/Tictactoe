@@ -3,6 +3,7 @@ import { collection, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc
 import { db } from "../../firebase";
 import { useNavigate, Link } from "react-router-dom";
 import { auth } from "../../firebase";
+import { signOut } from "firebase/auth";
 
 interface Room {
   id: string;
@@ -161,6 +162,46 @@ const Lobby: React.FC = () => {
     navigate(`/game?room=${room.id}`);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to sign out.');
+    }
+  };
+
+  const handleJoinRoomPrompt = async () => {
+    if (!auth.currentUser) {
+      alert('You must be signed in to join a room.');
+      navigate('/login');
+      return;
+    }
+    const roomId = window.prompt('Enter room id:');
+    if (!roomId) return;
+    try {
+      const roomRef = doc(db, 'rooms', roomId);
+      const snap = await getDoc(roomRef);
+      if (!snap.exists()) {
+        alert('Room not found');
+        return;
+      }
+      const data: any = snap.data();
+      if (data.password) {
+        const p = window.prompt('Room requires a password. Enter password:');
+        if (p !== data.password) {
+          alert('Incorrect password.');
+          return;
+        }
+      }
+      navigate(`/game?room=${roomId}`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to join room.');
+    }
+  };
+
   const handleUnfriend = async (friendId: string) => {
     if (!auth.currentUser) return;
     const ok = window.confirm("Unfriend this user?");
@@ -269,8 +310,9 @@ const Lobby: React.FC = () => {
   return (
     <div style={{ padding: 20, maxWidth: 1100, margin: "16px auto" }}>
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>TicTacToe — Lobby</h1>
+        <h1>Lobby</h1>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <button onClick={() => setFriendsOpen((s) => !s)}>Friends</button>
           <Link to="/profile" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <img
               src={auth.currentUser?.photoURL || "https://www.gravatar.com/avatar?d=mp&s=40"}
@@ -279,11 +321,11 @@ const Lobby: React.FC = () => {
             />
             <span>{auth.currentUser?.displayName || auth.currentUser?.email || "Profile"}</span>
           </Link>
-          {!userSignedIn && (
+          {userSignedIn ? (
+            <button onClick={handleSignOut}>Logout</button>
+          ) : (
             <Link to="/login">Sign in</Link>
           )}
-          <button onClick={() => setCreating((s) => !s)}>Create Room</button>
-          <button onClick={() => setFriendsOpen((s) => !s)}>Friends</button>
         </div>
       </header>
 
@@ -313,7 +355,13 @@ const Lobby: React.FC = () => {
           )}
 
           <main style={{ marginTop: 16 }}>
-            <h2>Public Rooms</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0 }}>Public Rooms</h2>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setCreating((s) => !s)}>{creating ? 'Cancel' : 'Create Room'}</button>
+                <button onClick={handleJoinRoomPrompt}>Join Room</button>
+              </div>
+            </div>
             <div style={{ display: "grid", gap: 12 }}>
               {rooms.length === 0 && <div>No public rooms yet — create one!</div>}
               {rooms.map((r) => (
