@@ -16,7 +16,6 @@ const serviceAccount = require('./tictactoe.json'); // Path to Firebase Admin SD
 
 firebaseAdmin.initializeApp({
   credential: firebaseAdmin.credential.cert(serviceAccount),
-  databaseURL: 'https://<your-firebase-project-id>.firebaseio.com'
 });
 
 const db = firebaseAdmin.firestore();
@@ -60,33 +59,57 @@ app.post('/api/games', async (req, res) => {
 // Note: use server.listen below (we use the HTTP server + socket.io). Removed duplicate app.listen call.
 
 
-const rooms = {}; // { [roomId]: { players: [{id,name,symbol,socketId}], spectators: Set, board, xIsNext, started, winner } }
+const rooms = {}; // { [roomId]: { players: [{id,name,symbol,socketId,clientId}], spectators: Map<clientId,socketId>, clientSockets: Map<clientId, Set<socketId>>, board, xIsNext, started, winner } }
 
 function makeRoomIfMissing(roomId) {
   if (!rooms[roomId]) {
-    rooms[roomId] = { players: [], spectators: new Set(), board: Array(9).fill(""), xIsNext: true, started: false, winner: null };
+    rooms[roomId] = { players: [], spectators: new Map(), clientSockets: new Map(), board: Array(9).fill(""), xIsNext: true, started: false, winner: null };
   }
 }
 
 io.on("connection", (socket) => {
   console.log("socket connected", socket.id);
 
-  socket.on("join-room", ({ roomId, userName }) => {
+  socket.on("join-room", ({ roomId, userName, clientId }) => {
     makeRoomIfMissing(roomId);
     const room = rooms[roomId];
+    const cid = clientId || socket.id;
 
-    // ensure single window => same socket id is the identity for the window
-    // Promote to player if slots available; default to spectator if 2 players already
-    if (room.players.length < 2) {
+    // track this socket under the client's socket set
+    let sset = room.clientSockets.get(cid);
+    if (!sset) {
+      sset = new Set();
+      room.clientSockets.set(cid, sset);
+    }
+    sset.add(socket.id);
+
+    // If the client already is a player, treat as reconnect: update socketId
+    const existingPlayer = room.players.find(p => p.clientId === cid);
+    if (existingPlayer) {
+      existingPlayer.socketId = socket.id;
+      console.log(`Room ${roomId}: ${existingPlayer.name} reconnected (client ${cid}) -> socket ${socket.id}`);
+      socket.data.role = "player";
+      socket.data.symbol = existingPlayer.symbol;
+      socket.join(roomId);
+    } else if (room.players.length < 2) {
+      // Add as new player
       const symbol = room.players.length === 0 ? "X" : "O";
-      const player = { id: socket.id, name: userName || `Player-${socket.id.slice(0,4)}`, symbol, socketId: socket.id };
+      const player = { id: socket.id, clientId: cid, name: userName || `Player-${cid.slice(0,4)}`, symbol, socketId: socket.id };
       room.players.push(player);
+      console.log(`Room ${roomId}: ${player.name} joined as ${symbol} (client ${cid}, socket ${socket.id})`);
+      if (room.players.length === 2) {
+        const names = room.players.map(p => `${p.name}(${p.symbol})`).join(', ');
+        console.log(`Room ${roomId}: Second player joined — players: ${names}`);
+      }
       socket.data.role = "player";
       socket.data.symbol = symbol;
       socket.join(roomId);
       room.started = room.players.length === 2; // start automatically when 2 players
     } else {
-      room.spectators.add(socket.id);
+      // Add as spectator keyed by clientId (store name with socket id)
+      const spectatorName = userName || `Spectator-${cid.slice(0,4)}`;
+      console.log(`Room ${roomId}: ${spectatorName} joined as spectator (client ${cid}, socket ${socket.id})`);
+      room.spectators.set(cid, { socketId: socket.id, name: spectatorName });
       socket.data.role = "spectator";
       socket.join(roomId);
     }
@@ -135,10 +158,14 @@ io.on("connection", (socket) => {
     // spectator requests to become a player — server will add if slot available
     const room = rooms[roomId];
     if (!room) return;
-    if (room.players.length < 2 && room.spectators.has(socket.id)) {
+    // find clientId for this socket
+    const cid = findClientIdForSocket(room, socket.id) || socket.id;
+    if (room.players.length < 2 && room.spectators.has(cid)) {
       const symbol = room.players.length === 0 ? "X" : "O";
-      room.players.push({ id: socket.id, name: `Player-${socket.id.slice(0,4)}`, symbol, socketId: socket.id });
-      room.spectators.delete(socket.id);
+      const promotedName = `Player-${cid.slice(0,4)}`;
+      room.players.push({ id: socket.id, clientId: cid, name: promotedName, symbol, socketId: socket.id });
+      console.log(`Room ${roomId}: ${promotedName} promoted to player as ${symbol} (client ${cid}, socket ${socket.id})`);
+      room.spectators.delete(cid);
       socket.data.role = "player";
       socket.data.symbol = symbol;
       room.started = room.players.length === 2;
@@ -148,12 +175,32 @@ io.on("connection", (socket) => {
     }
   });
 
+  // chat messages broadcast to room
+  socket.on("chat", ({ roomId, name, text, clientId }) => {
+    if (!roomId || !text) return;
+    const room = rooms[roomId];
+    if (!room) return;
+    // Prefer server-known name (player or spectator) over client-provided name
+    let fromName = null;
+    if (clientId) {
+      const player = room.players.find(p => p.clientId === clientId);
+      if (player) fromName = player.name;
+      else {
+        const spect = room.spectators.get(clientId);
+        if (spect && spect.name) fromName = spect.name;
+      }
+    }
+    if (!fromName) fromName = name || `User-${socket.id.slice(0,4)}`;
+    console.log(`Room ${roomId}: chat from ${fromName}: ${text}`);
+    io.to(roomId).emit("chat", { from: fromName, text, clientId });
+  });
+
   socket.on("leave-room", ({ roomId }) => {
     leaveRoom(socket, roomId);
   });
 
   socket.on("disconnect", () => {
-    // find any room and remove socket
+    // find any room and remove this socket; only remove client entry when last socket for that client disconnects
     Object.keys(rooms).forEach(roomId => leaveRoom(socket, roomId));
     console.log("socket disconnected", socket.id);
   });
@@ -161,21 +208,59 @@ io.on("connection", (socket) => {
   function leaveRoom(socket, roomId) {
     const room = rooms[roomId];
     if (!room) return;
-    // remove from players if present
-    const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
-    if (playerIdx >= 0) {
-      const removed = room.players.splice(playerIdx, 1)[0];
-      // if game started and other player exists => other player wins
-      if (room.started && room.players.length === 1) {
-        room.winner = room.players[0].symbol;
-        room.started = false;
-        io.to(roomId).emit("game-over", { winner: room.winner, reason: "player-left" });
+    // find clientId for this socket
+    const cid = findClientIdForSocket(room, socket.id) || socket.id;
+
+    // remove this socket from client's socket set
+    const sset = room.clientSockets.get(cid);
+    if (sset) {
+      sset.delete(socket.id);
+      if (sset.size === 0) {
+        room.clientSockets.delete(cid);
+        // fully disconnected client: remove from players or spectators
+        const playerIdx = room.players.findIndex(p => p.clientId === cid);
+        if (playerIdx >= 0) {
+          const removed = room.players.splice(playerIdx, 1)[0];
+          console.log(`Room ${roomId}: ${removed.name} (client ${cid}) fully disconnected`);
+          // if game started and other player exists => other player wins
+            if (room.started && room.players.length === 1) {
+              if (!room.winner) {
+                room.winner = room.players[0].symbol;
+                room.started = false;
+                io.to(roomId).emit("game-over", { winner: room.winner, reason: "player-left" });
+              } else {
+                console.log(`Room ${roomId}: game-over already emitted (winner ${room.winner})`);
+              }
+            }
+        }
+        if (room.spectators.has(cid)) {
+          room.spectators.delete(cid);
+          console.log(`Room ${roomId}: spectator (client ${cid}) fully disconnected`);
+        }
+      } else {
+        // other sockets for this client still connected; do not remove player/spectator
+        console.log(`Room ${roomId}: socket ${socket.id} disconnected but client ${cid} still has ${sset.size} sockets`);
+      }
+    } else {
+      // fallback: try to remove by socketId for legacy entries
+      const playerIdx = room.players.findIndex(p => p.socketId === socket.id);
+      if (playerIdx >= 0) {
+        const removed = room.players.splice(playerIdx, 1)[0];
+        if (room.started && room.players.length === 1) {
+          room.winner = room.players[0].symbol;
+          room.started = false;
+          io.to(roomId).emit("game-over", { winner: room.winner, reason: "player-left" });
+        }
+      }
+      // remove spectator by matching socket id
+      for (const [spectatorCid, sid] of room.spectators.entries()) {
+        if (sid === socket.id) {
+          room.spectators.delete(spectatorCid);
+          break;
+        }
       }
     }
-    // remove from spectators
-    if (room.spectators.has(socket.id)) {
-      room.spectators.delete(socket.id);
-    }
+
     socket.leave(roomId);
     // remove room if empty
     if (room.players.length + room.spectators.size === 0) {
@@ -184,11 +269,18 @@ io.on("connection", (socket) => {
       io.to(roomId).emit("room-update", { roomId, room: sanitizeRoom(room) });
     }
   }
+
+  function findClientIdForSocket(room, socketId) {
+    for (const [cid, sset] of room.clientSockets.entries()) {
+      if (sset.has(socketId)) return cid;
+    }
+    return null;
+  }
 });
 
 function sanitizeRoom(room) {
   return {
-    players: room.players.map(p => ({ name: p.name, symbol: p.symbol })),
+    players: room.players.map(p => ({ name: p.name, symbol: p.symbol, clientId: p.clientId })),
     spectators: room.spectators ? room.spectators.size : 0,
     board: room.board,
     xIsNext: room.xIsNext,

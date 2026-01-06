@@ -117,7 +117,9 @@
 /* chat */
 .chat-window { display:flex; flex-direction:column; height:420px; border:1px solid #eee; border-radius:8px; overflow:hidden; }
 .chat-list { padding:12px; flex:1; overflow:auto; display:flex; flex-direction:column; gap:8px; background:#fafafa;}
-.chat-message { ; padding:8px 10px; border-radius:7px; border:1px solid #eee; max-width:100%; }
+.chat-message { padding:8px 10px; border-radius:7px; border:1px solid #eee; max-width:100%; color:#111; background:#fff; }
+.chat-list, .chat-input input { color: #111; }
+.chat-message strong { color: #111; }
 .chat-input { display:flex; gap:8px; padding:10px; border-top:1px solid #eee; background:#fff; }
 .chat-input input { flex:1; padding:8px; border-radius:6px; border:1px solid #ddd; }
 .chat-input button { padding:8px 12px; border-radius:6px; border:1px solid #0077ff; background:#0077ff; color:#fff; cursor:pointer; }

@@ -22,7 +22,7 @@ const Signup: React.FC = () => {
       setLoading(true);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       console.log("Created user:", userCredential.user);
-      navigate("/");
+      navigate("/lobby");
     } catch (err: any) {
       console.error(err);
       const message = err?.code || err?.message || "Failed to create account.";
