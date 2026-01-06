@@ -1,20 +1,23 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "../../firebase";
+
+// Use ui-avatars as a deterministic fallback avatar service when user does not provide photoURL.
 
 const Signup: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!email || !password) {
-      setError("Please enter email and password.");
+    if (!email || !password || !username) {
+      setError("Please enter email, username and password.");
       return;
     }
 
@@ -22,6 +25,16 @@ const Signup: React.FC = () => {
       setLoading(true);
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       console.log("Created user:", userCredential.user);
+      // set displayName (username) and gravatar photoURL
+      try {
+        // use ui-avatars to create a simple avatar from username (avoids needing MD5/gravatar)
+        const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&size=200`;
+        await updateProfile(userCredential.user, { displayName: username, photoURL: avatar });
+        // store locally as fallback
+        try { localStorage.setItem('displayName', username); } catch(e) {}
+      } catch (e) {
+        console.warn('Failed to set profile displayName/photoURL', e);
+      }
       navigate("/lobby");
     } catch (err: any) {
       console.error(err);
@@ -56,6 +69,16 @@ const Signup: React.FC = () => {
           onChange={(e) => setPassword(e.target.value)}
           style={{ width: "100%", padding: 8, marginBottom: 12 }}
           placeholder="Choose a password"
+          required
+        />
+
+        <label style={{ display: "block", marginBottom: 8 }}>Username</label>
+        <input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          style={{ width: "100%", padding: 8, marginBottom: 12 }}
+          placeholder="Display name"
           required
         />
 

@@ -95,6 +95,7 @@
   flex-direction:column;
   gap:12px;
 }
+.ttt-right { position: relative; }
 
 .right-top {
   display:flex;
@@ -105,8 +106,14 @@
 .spectator { font-weight:600; }
 
 .profile { position:relative; }
-.profile-btn { background:transparent; border:1px solid #ddd; padding:6px; border-radius:50%; cursor:pointer; }
-.avatar-small { width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#ddd;font-weight:700; }
+.profile-btn { background:transparent; border:1px solid #ddd; padding:6px 8px; border-radius:20px; cursor:pointer; display:flex; align-items:center; gap:8px; }
+.profile-name { font-weight:600; margin-right:8px; }
+.profile-name-bold { font-weight:700; }
+.avatar-small { width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#ddd;font-weight:700; overflow:hidden; }
+
+.avatar-small img, .avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+.avatar-initials { display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-weight:700; }
+.avatar img { display:block; }
 
 .drop-menu {
   position:absolute; right:0; margin-top:8px; background:#fff; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,.12); padding:6px; min-width:120px;
@@ -123,3 +130,18 @@
 .chat-input { display:flex; gap:8px; padding:10px; border-top:1px solid #eee; background:#fff; }
 .chat-input input { flex:1; padding:8px; border-radius:6px; border:1px solid #ddd; }
 .chat-input button { padding:8px 12px; border-radius:6px; border:1px solid #0077ff; background:#0077ff; color:#fff; cursor:pointer; }
+
+/* restart overlay */
+.restart-overlay { position:absolute; right:24px; top:120px; width:280px; display:flex; align-items:center; justify-content:center; }
+.restart-btn { padding:12px 18px; border-radius:8px; background:#10b981; color:#fff; border:0; cursor:pointer; font-weight:600; }
+.waiting-text { padding:12px 18px; border-radius:8px; background:#f3f4f6; color:#111; border:1px solid #e5e7eb; }
+
+/* centered modal for game-over / tie */
+.center-modal-backdrop {
+  position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index:2500;
+}
+.center-modal {
+  background:#fff; padding:20px 24px; border-radius:12px; min-width:320px; box-shadow:0 12px 40px rgba(2,6,23,0.2); display:flex; flex-direction:column; gap:12px; align-items:center;
+}
+.center-modal .title { font-weight:700; font-size:18px; }
+.center-modal .actions { display:flex; gap:12px; }
