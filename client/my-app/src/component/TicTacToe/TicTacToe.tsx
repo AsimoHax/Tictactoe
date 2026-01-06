@@ -4,6 +4,7 @@ import cross from "../Assets/cross.png";
 import circle from "../Assets/circle.png";
 import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
+import { useNavigate } from "react-router-dom";
 
 const WIN_PATTERNS = [
   [0, 1, 2],
@@ -17,6 +18,7 @@ const WIN_PATTERNS = [
 ];
 
 export const TicTacToe: React.FC = () => {
+  const navigate = useNavigate();
   const emptyBoard = Array(9).fill("");
   const [board, setBoard] = useState<string[]>(emptyBoard);
   const [xIsNext, setXIsNext] = useState(true);
@@ -129,12 +131,7 @@ export const TicTacToe: React.FC = () => {
     <div className="ttt-page">
       <div className="ttt-left">
         <div className="left-top">
-          <button
-            className="back-btn"
-            onClick={() => {
-              /* navigate back */
-            }}
-          >
+          <button className="back-btn" onClick={() => navigate("/lobby")}>
             ← Back
           </button>
           <button
