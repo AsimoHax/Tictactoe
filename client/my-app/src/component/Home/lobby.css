@@ -1,0 +1,71 @@
+/* Layout chính để chứa Sidebar và Nội dung */
+.layout-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #1a161d;
+}
+
+/* Sidebar */
+.sidebar {
+  background-color: #2d242f;
+  border-right: 1px solid #3d3141;
+  transition: width 0.3s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.sidebar.open {
+  width: 260px;
+}
+
+.sidebar.closed {
+  width: 60px;
+}
+
+/* Nút Toggle Sidebar */
+.toggle-btn {
+  background: #ff79c6;
+  border: none;
+  color: white;
+  padding: 10px;
+  cursor: pointer;
+  width: 100%;
+  font-weight: bold;
+}
+
+/* Khu vực Profile trong Sidebar */
+.sidebar-profile {
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #3d3141;
+}
+
+.sidebar-profile img {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #ff79c6;
+}
+
+.profile-info {
+  text-align: center;
+  transition: opacity 0.2s;
+}
+
+.sidebar.closed .profile-info,
+.sidebar.closed .nav-text {
+  display: none;
+}
+
+/* Nội dung chính của Lobby bên phải */
+.main-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+}

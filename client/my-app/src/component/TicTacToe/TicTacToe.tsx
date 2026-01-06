@@ -2,8 +2,12 @@ import React, { useEffect, useState } from "react";
 import "./TicTacToe.css";
 import cross from "../Assets/cross.png";
 import circle from "../Assets/circle.png";
+<<<<<<< HEAD
 import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
+=======
+import socket from "../../socket";
+>>>>>>> cd0c544c7356fc43e285e8d2373b294bd5149183
 import { useNavigate } from "react-router-dom";
 
 const WIN_PATTERNS = [
@@ -25,37 +29,54 @@ export const TicTacToe: React.FC = () => {
   const [winner, setWinner] = useState<string | null>(null);
   const [spectators, setSpectators] = useState<number>(3);
   const [chat, setChat] = useState<{ from: string; text: string }[]>([
-    { from: "System", text: "Welcome to the game" },
   ]);
+  const [clientId] = useState(() => {
+    let id = localStorage.getItem("clientId");
+    if (!id) {
+      id = Math.random().toString(36).slice(2, 10);
+      try { localStorage.setItem("clientId", id); } catch (e) {}
+    }
+    return id;
+  });
   const [message, setMessage] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  // using shared socket singleton
   const [roomInfo, setRoomInfo] = useState<any>(null);
   const [role, setRole] = useState<"player" | "spectator" | null>(null);
   const [symbol, setSymbol] = useState<"X" | "O" | null>(null);
+  const navigate = useNavigate();
+  
 
   useEffect(() => {
     // read room id from query param ?room=abc
     const params = new URLSearchParams(window.location.search);
     const roomId = params.get("room") || "default-room";
 
-    const s = io("http://localhost:5000");
-    setSocket(s);
+    const s = socket;
+    // ensure no duplicate listeners
+    s.off("connect");
+    s.off("room-update");
+    s.off("game-over");
+    s.off("chat");
 
+    const joinPayload = { roomId, userName: "Client-" + clientId.slice(0,4), clientId };
     s.on("connect", () => {
-      s.emit("join-room", { roomId, userName: "Client-" + s.id.slice(0, 4) });
+      s.emit("join-room", joinPayload);
     });
+    // if socket already connected (singleton), join immediately
+    if (s.connected) {
+      s.emit("join-room", joinPayload);
+    }
 
     s.on("room-update", ({ roomId: rid, room }) => {
+      console.log('room-update', roomId, room);
       setRoomInfo(room);
-      // set role & symbol locally when assigned by server: detect whether we are a player or spectator by checking if socket is player
-      // server doesn't return per-socket assignment — we infer locally by requesting role metadata
-      const meIsPlayer = room.players.some((p) =>
-        p.name.includes(s.id.slice(0, 4))
-      );
+      setSpectators(room.spectators ?? 0);
+      // server now includes clientId on players; detect our role by clientId
+      const meIsPlayer = room.players.some((p: any) => p.clientId === clientId);
       if (meIsPlayer) {
         setRole("player");
-        const p = room.players.find((p) => p.name.includes(s.id.slice(0, 4)));
+        const p = room.players.find((p: any) => p.clientId === clientId);
         setSymbol(p?.symbol || null);
       } else {
         setRole("spectator");
@@ -76,10 +97,16 @@ export const TicTacToe: React.FC = () => {
         },
       ]);
     });
+    s.on("chat", ({ from, text }) => {
+      console.log("received chat", { from, text });
+      setChat((c) => [...c, { from: from || "Unknown", text }]);
+    });
 
-    // cleanup
+    // cleanup listeners on unmount to avoid duplicate handlers
     return () => {
-      if (s.connected) s.disconnect();
+      s.off("room-update");
+      s.off("game-over");
+      s.off("chat");
     };
   }, []);
 
@@ -103,8 +130,12 @@ export const TicTacToe: React.FC = () => {
   }
 
   function sendMessage() {
-    if (!message.trim()) return;
-    setChat((c) => [...c, { from: "You", text: message.trim() }]);
+    if (!message.trim() || !socket) return;
+    const roomId = new URLSearchParams(window.location.search).get("room") || "default-room";
+    const myPlayer = roomInfo?.players?.find((p: any) => p.clientId === clientId);
+    const name = myPlayer?.name || (role === "player" ? `Player-${symbol || "?"}` : `Spectator`);
+    console.log("send chat", { roomId, name, text: message.trim(), clientId });
+    socket.emit("chat", { roomId, name, text: message.trim(), clientId });
     setMessage("");
   }
 
@@ -124,6 +155,7 @@ export const TicTacToe: React.FC = () => {
       roomId:
         new URLSearchParams(window.location.search).get("room") ||
         "default-room",
+      clientId,
     });
   }
 
@@ -131,7 +163,16 @@ export const TicTacToe: React.FC = () => {
     <div className="ttt-page">
       <div className="ttt-left">
         <div className="left-top">
+<<<<<<< HEAD
           <button className="back-btn" onClick={() => navigate("/lobby")}>
+=======
+          <button
+            className="back-btn"
+            onClick={() => {
+              navigate('/lobby')
+            }}
+          >
+>>>>>>> cd0c544c7356fc43e285e8d2373b294bd5149183
             ← Back
           </button>
           <button
@@ -144,23 +185,21 @@ export const TicTacToe: React.FC = () => {
         </div>
 
         <div className="player-list">
-          <div className={`player card ${xIsNext ? "active" : ""}`}>
-            <div className="avatar">X</div>
-            <div className="meta">
-              <div className="name">Player X</div>
-              <div className="status">{xIsNext ? "Your turn" : "Waiting"}</div>
-            </div>
-            <img src={cross} alt="X" className="symbol" />
-          </div>
-
-          <div className={`player card ${!xIsNext ? "active" : ""}`}>
-            <div className="avatar">O</div>
-            <div className="meta">
-              <div className="name">Player O</div>
-              <div className="status">{!xIsNext ? "Your turn" : "Waiting"}</div>
-            </div>
-            <img src={circle} alt="O" className="symbol" />
-          </div>
+          {/* Render players from server (symbol X and O) */}
+          {['X','O'].map((sym) => {
+            const p = roomInfo?.players?.find((pl: any) => pl.symbol === sym);
+            const isActive = xIsNext ? sym === 'X' : sym === 'O';
+            return (
+              <div key={sym} className={`player card ${isActive ? 'active' : ''}`}>
+                <div className="avatar">{sym}</div>
+                <div className="meta">
+                  <div className="name">{p?.name || `Player ${sym}`}</div>
+                  <div className="status">{isActive ? (role === 'player' && symbol === sym ? 'Your turn' : 'Your turn') : 'Waiting'}</div>
+                </div>
+                <img src={sym === 'X' ? cross : circle} alt={sym} className="symbol" />
+              </div>
+            );
+          })}
         </div>
 
         <div className="left-footer">

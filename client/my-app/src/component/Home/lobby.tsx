@@ -39,6 +39,7 @@ const Lobby: React.FC = () => {
   const [openFriendMenu, setOpenFriendMenu] = useState<string | null>(null);
   const [requestUsername, setRequestUsername] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -342,6 +343,45 @@ const Lobby: React.FC = () => {
 
   return (
     <div style={{ padding: 20, maxWidth: 1100, margin: "16px auto" }}>
+      <aside className={`sidebar ${isSidebarOpen ? "open" : "closed"}`}>
+        <button
+          className="sidebar-toggle"
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        >
+          {isSidebarOpen ? "◀" : "▶"}
+        </button>
+
+        <div className="sidebar-profile">
+          <Link to="/profile">
+            <img
+              src={
+                auth.currentUser?.photoURL ||
+                "https://www.gravatar.com/avatar?d=mp&s=80"
+              }
+              alt="avatar"
+            />
+          </Link>
+          <span className="sidebar-user-name">
+            {auth.currentUser?.displayName ||
+              auth.currentUser?.email?.split("@")[0]}
+          </span>
+        </div>
+
+        <nav style={{ padding: "10px" }}>
+          <button
+            onClick={() => navigate("/lobby")}
+            style={{ width: "100%", marginBottom: "10px", padding: "10px" }}
+          >
+            🏠 <span className="nav-text">Lobby</span>
+          </button>
+          <button
+            onClick={() => navigate("/profile")}
+            style={{ width: "100%", padding: "10px" }}
+          >
+            👤 <span className="nav-text">Hồ sơ</span>
+          </button>
+        </nav>
+      </aside>
       <header
         style={{
           display: "flex",
