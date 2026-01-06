@@ -2,12 +2,7 @@ import React, { useEffect, useState } from "react";
 import "./TicTacToe.css";
 import cross from "../Assets/cross.png";
 import circle from "../Assets/circle.png";
-<<<<<<< HEAD
-import { io } from "socket.io-client";
-import type { Socket } from "socket.io-client";
-=======
 import socket from "../../socket";
->>>>>>> cd0c544c7356fc43e285e8d2373b294bd5149183
 import { useNavigate } from "react-router-dom";
 
 const WIN_PATTERNS = [

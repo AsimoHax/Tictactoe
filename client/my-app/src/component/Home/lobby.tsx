@@ -1,14 +1,5 @@
 import React, { useEffect, useState } from "react";
-import {
-  collection,
-  onSnapshot,
-  addDoc,
-  serverTimestamp,
-  doc,
-  getDoc,
-  updateDoc,
-  arrayRemove,
-} from "firebase/firestore";
+import { collection, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc, arrayRemove } from "firebase/firestore";
 import { db } from "../../firebase";
 import { useNavigate, Link } from "react-router-dom";
 import { auth } from "../../firebase";
@@ -31,38 +22,31 @@ const Lobby: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [userSignedIn, setUserSignedIn] = useState<boolean>(!!auth.currentUser);
   const [friendsOpen, setFriendsOpen] = useState<boolean>(false);
-  const [friendsTab, setFriendsTab] = useState<"friends" | "requests">(
-    "friends"
-  );
+  const [friendsTab, setFriendsTab] = useState<"friends" | "requests">("friends");
   const [friends, setFriends] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [openFriendMenu, setOpenFriendMenu] = useState<string | null>(null);
   const [requestUsername, setRequestUsername] = useState("");
   const [requestError, setRequestError] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const col = collection(db, "rooms");
-    const unsub = onSnapshot(
-      col,
-      (snap) => {
-        const arr: Room[] = [];
-        snap.forEach((doc) => {
-          const data = doc.data() as any;
-          arr.push({
-            id: doc.id,
-            name: data.name || "Unnamed",
-            status: data.status || "open",
-            players: data.players || [],
-            spectators: data.spectators || 0,
-            password: data.password || undefined,
-          });
+    const unsub = onSnapshot(col, (snap) => {
+      const arr: Room[] = [];
+      snap.forEach((doc) => {
+        const data = doc.data() as any;
+        arr.push({
+          id: doc.id,
+          name: data.name || "Unnamed",
+          status: data.status || "open",
+          players: data.players || [],
+          spectators: data.spectators || 0,
+          password: data.password || undefined,
         });
-        setRooms(arr);
-      },
-      (err) => console.error(err)
-    );
+      });
+      setRooms(arr);
+    }, (err) => console.error(err));
 
     return () => unsub();
   }, []);
@@ -84,47 +68,39 @@ const Lobby: React.FC = () => {
       return;
     }
     const userDocRef = doc(db, "users", auth.currentUser.uid);
-    unsubUser = onSnapshot(
-      userDocRef,
-      async (snap) => {
-        const data = snap.data() as any;
-        const friendIds: string[] = data?.friends || [];
-        const requestIds: string[] = data?.friendRequests || [];
-
-        // Load friends
-        if (!friendIds.length) {
+    unsubUser = onSnapshot(userDocRef, async (snap) => {
+      const data = snap.data() as any;
+      const friendIds: string[] = data?.friends || [];
+      const requestIds: string[] = data?.friendRequests || [];
+      
+      // Load friends
+      if (!friendIds.length) {
+        setFriends([]);
+      } else {
+        try {
+          const docs = await Promise.all(friendIds.map((id) => getDoc(doc(db, "users", id))));
+          const list = docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+          setFriends(list);
+        } catch (err) {
+          console.error("Failed to load friends:", err);
           setFriends([]);
-        } else {
-          try {
-            const docs = await Promise.all(
-              friendIds.map((id) => getDoc(doc(db, "users", id)))
-            );
-            const list = docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
-            setFriends(list);
-          } catch (err) {
-            console.error("Failed to load friends:", err);
-            setFriends([]);
-          }
         }
-
-        // Load pending requests
-        if (!requestIds.length) {
+      }
+      
+      // Load pending requests
+      if (!requestIds.length) {
+        setRequests([]);
+      } else {
+        try {
+          const docs = await Promise.all(requestIds.map((id) => getDoc(doc(db, "users", id))));
+          const list = docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
+          setRequests(list);
+        } catch (err) {
+          console.error("Failed to load requests:", err);
           setRequests([]);
-        } else {
-          try {
-            const docs = await Promise.all(
-              requestIds.map((id) => getDoc(doc(db, "users", id)))
-            );
-            const list = docs.map((d) => ({ id: d.id, ...(d.data() || {}) }));
-            setRequests(list);
-          } catch (err) {
-            console.error("Failed to load requests:", err);
-            setRequests([]);
-          }
         }
-      },
-      (err) => console.error(err)
-    );
+      }
+    }, (err) => console.error(err));
 
     return () => unsubUser && unsubUser();
   }, []);
@@ -161,13 +137,8 @@ const Lobby: React.FC = () => {
       console.error(err);
       // Friendly message for permission errors
       const code = (err as any)?.code || (err as any)?.message || "";
-      if (
-        String(code).includes("permission-denied") ||
-        String(code).includes("Missing or insufficient")
-      ) {
-        setError(
-          "Permission denied: you are not allowed to create rooms. Ensure you are signed in and have write access."
-        );
+      if (String(code).includes("permission-denied") || String(code).includes("Missing or insufficient")) {
+        setError("Permission denied: you are not allowed to create rooms. Ensure you are signed in and have write access.");
       } else {
         setError("Failed to create room.");
       }
@@ -177,7 +148,7 @@ const Lobby: React.FC = () => {
   const enterRoom = (room: Room) => {
     if (!auth.currentUser) {
       alert("You must be signed in to join a room.");
-      navigate("/login");
+      navigate('/login');
       return;
     }
     // If the room has a password, prompt for it.
@@ -194,40 +165,40 @@ const Lobby: React.FC = () => {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      navigate("/login");
+      navigate('/login');
     } catch (err) {
       console.error(err);
-      alert("Failed to sign out.");
+      alert('Failed to sign out.');
     }
   };
 
   const handleJoinRoomPrompt = async () => {
     if (!auth.currentUser) {
-      alert("You must be signed in to join a room.");
-      navigate("/login");
+      alert('You must be signed in to join a room.');
+      navigate('/login');
       return;
     }
-    const roomId = window.prompt("Enter room id:");
+    const roomId = window.prompt('Enter room id:');
     if (!roomId) return;
     try {
-      const roomRef = doc(db, "rooms", roomId);
+      const roomRef = doc(db, 'rooms', roomId);
       const snap = await getDoc(roomRef);
       if (!snap.exists()) {
-        alert("Room not found");
+        alert('Room not found');
         return;
       }
       const data: any = snap.data();
       if (data.password) {
-        const p = window.prompt("Room requires a password. Enter password:");
+        const p = window.prompt('Room requires a password. Enter password:');
         if (p !== data.password) {
-          alert("Incorrect password.");
+          alert('Incorrect password.');
           return;
         }
       }
       navigate(`/game?room=${roomId}`);
     } catch (err) {
       console.error(err);
-      alert("Failed to join room.");
+      alert('Failed to join room.');
     }
   };
 
@@ -256,15 +227,12 @@ const Lobby: React.FC = () => {
       });
       // Actually add them to friends
       await updateDoc(meRef, {
-        friends: [...friends.map((f) => f.id), requesterId],
+        friends: [...friends.map(f => f.id), requesterId],
       });
       // Also add me to their friends
       const requesterRef = doc(db, "users", requesterId);
       await updateDoc(requesterRef, {
-        friends: [
-          ...(requests.find((r) => r.id === requesterId)?.friends || []),
-          auth.currentUser.uid,
-        ],
+        friends: [...(requests.find(r => r.id === requesterId)?.friends || []), auth.currentUser.uid],
       });
     } catch (err) {
       console.error(err);
@@ -300,9 +268,7 @@ const Lobby: React.FC = () => {
       const snap = await new Promise<any>((resolve) => {
         const unsub = onSnapshot(usersRef, (s) => {
           unsub();
-          const found = s.docs.find(
-            (d) => d.data().email === requestUsername.trim()
-          );
+          const found = s.docs.find((d) => d.data().email === requestUsername.trim());
           resolve(found?.id || null);
         });
       });
@@ -343,77 +309,17 @@ const Lobby: React.FC = () => {
 
   return (
     <div style={{ padding: 20, maxWidth: 1100, margin: "16px auto" }}>
-      <aside className={`sidebar ${isSidebarOpen ? "open" : "closed"}`}>
-        <button
-          className="sidebar-toggle"
-          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        >
-          {isSidebarOpen ? "◀" : "▶"}
-        </button>
-
-        <div className="sidebar-profile">
-          <Link to="/profile">
-            <img
-              src={
-                auth.currentUser?.photoURL ||
-                "https://www.gravatar.com/avatar?d=mp&s=80"
-              }
-              alt="avatar"
-            />
-          </Link>
-          <span className="sidebar-user-name">
-            {auth.currentUser?.displayName ||
-              auth.currentUser?.email?.split("@")[0]}
-          </span>
-        </div>
-
-        <nav style={{ padding: "10px" }}>
-          <button
-            onClick={() => navigate("/lobby")}
-            style={{ width: "100%", marginBottom: "10px", padding: "10px" }}
-          >
-            🏠 <span className="nav-text">Lobby</span>
-          </button>
-          <button
-            onClick={() => navigate("/profile")}
-            style={{ width: "100%", padding: "10px" }}
-          >
-            👤 <span className="nav-text">Hồ sơ</span>
-          </button>
-        </nav>
-      </aside>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
+      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Lobby</h1>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <button onClick={() => setFriendsOpen((s) => !s)}>Friends</button>
-          <Link
-            to="/profile"
-            style={{ display: "flex", alignItems: "center", gap: 8 }}
-          >
+          {/* <button onClick={() => setFriendsOpen((s) => !s)}>Friends</button> */}
+          <Link to="/profile" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <img
-              src={
-                auth.currentUser?.photoURL ||
-                "https://www.gravatar.com/avatar?d=mp&s=40"
-              }
+              src={auth.currentUser?.photoURL || "https://www.gravatar.com/avatar?d=mp&s=40"}
               alt="avatar"
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: "50%",
-                objectFit: "cover",
-              }}
+              style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover" }}
             />
-            <span>
-              {auth.currentUser?.displayName ||
-                auth.currentUser?.email ||
-                "Profile"}
-            </span>
+            <span>{auth.currentUser?.displayName || auth.currentUser?.email || "Profile"}</span>
           </Link>
           {userSignedIn ? (
             <button onClick={handleSignOut}>Logout</button>
@@ -424,90 +330,51 @@ const Lobby: React.FC = () => {
       </header>
 
       <div style={{ display: "flex", gap: 16, marginTop: 12 }}>
+
         <div style={{ flex: 1 }}>
           {creating && (
-            <form
-              onSubmit={handleCreate}
-              style={{
-                marginTop: 12,
-                marginBottom: 12,
-                display: "grid",
-                gap: 8,
-              }}
-            >
-              <input
-                placeholder="Room name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                style={{ padding: 8 }}
-              />
-              <input
-                placeholder="Password (optional)"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                style={{ padding: 8 }}
-              />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="submit">Create</button>
-                <button type="button" onClick={() => setCreating(false)}>
-                  Cancel
-                </button>
-              </div>
-              {error && <div style={{ color: "#b00020" }}>{error}</div>}
-            </form>
+        <form onSubmit={handleCreate} style={{ marginTop: 12, marginBottom: 12, display: "grid", gap: 8 }}>
+          <input
+            placeholder="Room name"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            style={{ padding: 8 }}
+          />
+          <input
+            placeholder="Password (optional)"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            style={{ padding: 8 }}
+          />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit">Create</button>
+            <button type="button" onClick={() => setCreating(false)}>Cancel</button>
+          </div>
+          {error && <div style={{ color: "#b00020" }}>{error}</div>}
+        </form>
           )}
 
           <main style={{ marginTop: 16 }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h2 style={{ margin: 0 }}>Public Rooms</h2>
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setCreating((s) => !s)}>
-                  {creating ? "Cancel" : "Create Room"}
-                </button>
+                <button onClick={() => setCreating((s) => !s)}>{creating ? 'Cancel' : 'Create Room'}</button>
                 <button onClick={handleJoinRoomPrompt}>Join Room</button>
               </div>
             </div>
             <div style={{ display: "grid", gap: 12 }}>
-              {rooms.length === 0 && (
-                <div>No public rooms yet — create one!</div>
-              )}
+              {rooms.length === 0 && <div>No public rooms yet — create one!</div>}
               {rooms.map((r) => (
-                <div
-                  key={r.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    padding: 12,
-                    borderRadius: 8,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
+                <div key={r.id} style={{ border: "1px solid #ddd", padding: 12, borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontWeight: 600 }}>{r.name}</div>
-                    <div style={{ fontSize: 13, color: "#666" }}>
-                      Status: {r.status}
-                    </div>
-                    <div style={{ fontSize: 13, color: "#666" }}>
-                      Players: {r.players.length}/2
-                    </div>
-                    <div style={{ fontSize: 13, color: "#666" }}>
-                      Spectators: {r.spectators}
-                    </div>
+                    <div style={{ fontSize: 13, color: "#666" }}>Status: {r.status}</div>
+                    <div style={{ fontSize: 13, color: "#666" }}>Players: {r.players.length}/2</div>
+                    <div style={{ fontSize: 13, color: "#666" }}>Spectators: {r.spectators}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => enterRoom(r)}>Enter Room</button>
-                    <button
-                      onClick={() => alert("Friend invite not implemented yet")}
-                    >
-                      Friend
-                    </button>
+                    {/* <button onClick={() => alert("Friend invite not implemented yet")}>Friend</button> */}
                   </div>
                 </div>
               ))}
@@ -518,36 +385,19 @@ const Lobby: React.FC = () => {
         {/* Friends panel on the right */}
         <aside style={{ width: 300 }}>
           {friendsOpen && (
-            <div
-              style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
+            <div style={{ border: "1px solid #eee", padding: 12, borderRadius: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <h3 style={{ margin: 0 }}>Friends</h3>
                 <button onClick={() => setFriendsOpen(false)}>Close</button>
               </div>
 
               {/* Tab buttons */}
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  marginTop: 12,
-                  borderBottom: "1px solid #eee",
-                  paddingBottom: 8,
-                }}
-              >
+              <div style={{ display: "flex", gap: 8, marginTop: 12, borderBottom: "1px solid #eee", paddingBottom: 8 }}>
                 <button
                   onClick={() => setFriendsTab("friends")}
                   style={{
                     padding: "6px 12px",
-                    background:
-                      friendsTab === "friends" ? "#007bff" : "transparent",
+                    background: friendsTab === "friends" ? "#007bff" : "transparent",
                     color: friendsTab === "friends" ? "white" : "#333",
                     border: "1px solid #ddd",
                     borderRadius: 4,
@@ -560,8 +410,7 @@ const Lobby: React.FC = () => {
                   onClick={() => setFriendsTab("requests")}
                   style={{
                     padding: "6px 12px",
-                    background:
-                      friendsTab === "requests" ? "#007bff" : "transparent",
+                    background: friendsTab === "requests" ? "#007bff" : "transparent",
                     color: friendsTab === "requests" ? "white" : "#333",
                     border: "1px solid #ddd",
                     borderRadius: 4,
@@ -578,93 +427,21 @@ const Lobby: React.FC = () => {
                   {friends.length === 0 && <div>No friends added yet.</div>}
                   <div style={{ display: "grid", gap: 8 }}>
                     {friends.map((f) => (
-                      <div
-                        key={f.id}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: 8,
-                          border: "1px solid #f0f0f0",
-                          borderRadius: 6,
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 8,
-                            alignItems: "center",
-                            flex: 1,
-                          }}
-                        >
-                          <img
-                            src={
-                              f.photoURL ||
-                              "https://www.gravatar.com/avatar?d=mp&s=40"
-                            }
-                            alt="avatar"
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: "50%",
-                            }}
-                          />
+                      <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, border: "1px solid #f0f0f0", borderRadius: 6 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}>
+                          <img src={f.photoURL || "https://www.gravatar.com/avatar?d=mp&s=40"} alt="avatar" style={{ width: 40, height: 40, borderRadius: "50%" }} />
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600 }}>
-                              {f.displayName || f.email || "Unnamed"}
-                            </div>
-                            <div style={{ fontSize: 12, color: "#666" }}>
-                              {f.currentRoom
-                                ? `In room ${f.currentRoom}`
-                                : "Not in a room"}
-                            </div>
+                            <div style={{ fontWeight: 600 }}>{f.displayName || f.email || "Unnamed"}</div>
+                            <div style={{ fontSize: 12, color: "#666" }}>{f.currentRoom ? `In room ${f.currentRoom}` : "Not in a room"}</div>
                           </div>
                         </div>
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 6,
-                            alignItems: "center",
-                          }}
-                        >
-                          {f.currentRoom && (
-                            <button
-                              onClick={() =>
-                                navigate(`/game?room=${f.currentRoom}`)
-                              }
-                            >
-                              Join
-                            </button>
-                          )}
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          {f.currentRoom && <button onClick={() => navigate(`/game?room=${f.currentRoom}`)}>Join</button>}
                           <div style={{ position: "relative" }}>
-                            <button
-                              onClick={() =>
-                                setOpenFriendMenu(
-                                  openFriendMenu === f.id ? null : f.id
-                                )
-                              }
-                            >
-                              ⋯
-                            </button>
+                            <button onClick={() => setOpenFriendMenu(openFriendMenu === f.id ? null : f.id)}>⋯</button>
                             {openFriendMenu === f.id && (
-                              <div
-                                style={{
-                                  position: "absolute",
-                                  right: 0,
-                                  top: 28,
-                                  background: "white",
-                                  border: "1px solid #ddd",
-                                  borderRadius: 6,
-                                  padding: 8,
-                                  zIndex: 10,
-                                }}
-                              >
-                                <button
-                                  onClick={() => handleUnfriend(f.id)}
-                                  style={{ display: "block" }}
-                                >
-                                  Unfriend
-                                </button>
+                              <div style={{ position: "absolute", right: 0, top: 28, background: "white", border: "1px solid #ddd", borderRadius: 6, padding: 8, zIndex: 10 }}>
+                                <button onClick={() => handleUnfriend(f.id)} style={{ display: "block" }}>Unfriend</button>
                               </div>
                             )}
                           </div>
@@ -681,50 +458,16 @@ const Lobby: React.FC = () => {
                   {requests.length === 0 && <div>No pending requests.</div>}
                   <div style={{ display: "grid", gap: 8 }}>
                     {requests.map((r) => (
-                      <div
-                        key={r.id}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: 8,
-                          border: "1px solid #f0f0f0",
-                          borderRadius: 6,
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: 8,
-                            alignItems: "center",
-                            flex: 1,
-                          }}
-                        >
-                          <img
-                            src={
-                              r.photoURL ||
-                              "https://www.gravatar.com/avatar?d=mp&s=40"
-                            }
-                            alt="avatar"
-                            style={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: "50%",
-                            }}
-                          />
+                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: 8, border: "1px solid #f0f0f0", borderRadius: 6 }}>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flex: 1 }}>
+                          <img src={r.photoURL || "https://www.gravatar.com/avatar?d=mp&s=40"} alt="avatar" style={{ width: 40, height: 40, borderRadius: "50%" }} />
                           <div>
-                            <div style={{ fontWeight: 600 }}>
-                              {r.displayName || r.email || "Unnamed"}
-                            </div>
+                            <div style={{ fontWeight: 600 }}>{r.displayName || r.email || "Unnamed"}</div>
                           </div>
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => handleAcceptRequest(r.id)}>
-                            Accept
-                          </button>
-                          <button onClick={() => handleDeclineRequest(r.id)}>
-                            Decline
-                          </button>
+                          <button onClick={() => handleAcceptRequest(r.id)}>Accept</button>
+                          <button onClick={() => handleDeclineRequest(r.id)}>Decline</button>
                         </div>
                       </div>
                     ))}
@@ -733,42 +476,24 @@ const Lobby: React.FC = () => {
               )}
 
               {/* Send Friend Request Section */}
-              <div
-                style={{
-                  marginTop: 16,
-                  paddingTop: 12,
-                  borderTop: "1px solid #eee",
-                }}
-              >
+              <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid #eee" }}>
                 <h4 style={{ margin: "0 0 8px 0" }}>Send Friend Request</h4>
-                <form
-                  onSubmit={handleSendRequest}
-                  style={{ display: "grid", gap: 8 }}
-                >
+                <form onSubmit={handleSendRequest} style={{ display: "grid", gap: 8 }}>
                   <input
                     type="text"
                     placeholder="Enter email"
                     value={requestUsername}
                     onChange={(e) => setRequestUsername(e.target.value)}
-                    style={{
-                      padding: 8,
-                      borderRadius: 4,
-                      border: "1px solid #ddd",
-                    }}
+                    style={{ padding: 8, borderRadius: 4, border: "1px solid #ddd" }}
                   />
-                  <button type="submit" style={{ padding: 8 }}>
-                    Send Request
-                  </button>
-                  {requestError && (
-                    <div style={{ color: "#b00020", fontSize: 12 }}>
-                      {requestError}
-                    </div>
-                  )}
+                  <button type="submit" style={{ padding: 8 }}>Send Request</button>
+                  {requestError && <div style={{ color: "#b00020", fontSize: 12 }}>{requestError}</div>}
                 </form>
               </div>
             </div>
           )}
         </aside>
+
       </div>
     </div>
   );
